@@ -1,0 +1,4 @@
+beautifulsoup4==4.11.1
+discord.py==1.7.3
+requests==2.26.0
+yt_dlp==2021.9.2

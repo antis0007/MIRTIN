@@ -241,15 +241,15 @@ class MIRTIN(commands.Cog):
     #     return player
 
     async def handle(self, ctx):
-        print("HANDLE CALLED")
+        #print("HANDLE CALLED")
         server_id = ctx.guild.id
 
         if server_id not in self.queue:
-            print("RESET QUEUE")
+            #print("RESET QUEUE")
             self.queue[server_id] = Queue()
 
         if server_id not in self.players:
-            print("RESET PLAYING")
+            #print("RESET PLAYING")
             self.players[server_id] = [0,timer()]
 
         # if server_id not in self.loops:
@@ -508,7 +508,7 @@ class MIRTIN(commands.Cog):
         print(current_time)
         ffmpeg_options_custom = ffmpeg_options.copy()
         #ffmpeg_options_custom['options'] += "-filter:a "
-        ffmpeg_options_custom['options'] += "-af:a "
+        #ffmpeg_options_custom['options'] += "-af:a "
         filter_lists = str(' '.join(filter_lists))
         print(filter_lists)
         filter_lists = filter_lists.split(",")
@@ -539,13 +539,11 @@ class MIRTIN(commands.Cog):
                         else:
                             await ctx.send("UNSUPPORTED FILTER")
                             return
-                    else:
-                        await ctx.send("UNSUPPORTED FILTER")
-                        return
+                    elif filter_type == "":
+                        filter_str = ""
+                        break
 
                 filter_parts = filter_dict[filter_type]
-                url = self.queue[server_id][0].ytdl_data["url"]
-                stream=True
                 #filter_parts:
                 #0: Complex Name
                 #1: Supported Variables
@@ -555,7 +553,12 @@ class MIRTIN(commands.Cog):
                     filter_str += "="+':'.join(filter_list)
                 filter_str += ","
 
-        ffmpeg_options_custom['options'] += '"' + filter_str.strip(",")+ '"'
+        url = self.queue[server_id][0].ytdl_data["url"]
+        stream=True
+        #ffmpeg_options_custom['options'] += '"' + filter_str.strip(",")+ '"'
+        if len(filter_str) > 0:
+            ffmpeg_options_custom['options'] += "-af:a "
+            ffmpeg_options_custom['options'] += filter_str.strip(",")
         print(ffmpeg_options_custom)
         current_time_str = time.strftime('%H:%M:%S.', time.gmtime(current_time)) + (str(current_time).split(".")[1])[0:2]
         print(current_time_str)

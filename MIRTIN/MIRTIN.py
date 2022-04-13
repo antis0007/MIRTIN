@@ -530,7 +530,7 @@ class MIRTIN(commands.Cog):
                             return
                             #for i in list(filter_dict.keys()):
                                 #await ctx.send(str(i))
-                        elif len(filter_list) == 1:
+                        elif (len(filter_list) == 1) and (filter_list[0] in filter_dict):
                             await ctx.send("FILTER INFO:")
                             for i in filter_dict[filter_list[0]][1]:
                                 #print(i)
@@ -542,6 +542,9 @@ class MIRTIN(commands.Cog):
                     elif filter_type == "":
                         filter_str = ""
                         break
+                    else:
+                        await ctx.send("UNSUPPORTED FILTER")
+                        return
 
                 filter_parts = filter_dict[filter_type]
                 #filter_parts:
@@ -549,6 +552,10 @@ class MIRTIN(commands.Cog):
                 #1: Supported Variables
                 #2: (ONLY SOME) Hints/Details
                 filter_str += (str(filter_parts[0]))
+
+                #filter_syntax = "var" #most filters take variable name parameters with values
+                #filter_syntax = "seq" #some filters take sequential parameters without variable names: (eg: aecho)
+
                 if len(filter_list) >= 1:
                     filter_str += "="+':'.join(filter_list)
                 filter_str += ","

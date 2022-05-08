@@ -3,12 +3,13 @@
 Relatively simple YT-DLP and FFMPEG based Discord Music Bot made with discord.py
 
 ## Features:
-* Can stream music from Youtube search queries or URLs
-* Song queue system with additional functions
-* Supports loading spotify songs/playlists into queue
+* Can stream music from Youtube search queries, playlists and URLs
+* Supports loading Spotify songs/playlists into a Queue
+* Multi-Server Async Processing
+* Song queue system with additional functions (Shuffle, Insert, etc...)
 * Supports live FFMPEG audio filters with simplified aliases
-* Audio Reversal (WIP, ironic)
-* Audio Seeking  (WIP)
+* Audio Reversal
+* Audio Seeking (WIP)
 
 	
 ## Setup:

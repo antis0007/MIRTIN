@@ -107,45 +107,20 @@ ytdl_format_options = {
     'preferredquality': '256',
     }],
     'outtmpl': 'song.%(ext)s',
-    #'external-downloader': 'aria2c',
-    #'external-downloader-args': "-x 16 -s 16 -k 1M",
+    'external-downloader': 'aria2c',
+    'external-downloader-args': "-x 16 -s 16 -k 1M",
     'restrictfilenames': True,
 
-    'default_search':"auto",
-
-    #'noplaylist': True,
+    'noplaylist': True,
     'skip_download': True,
     'flat-playlist': True,
-    #'no-flat-playlist': True,
-    'extract_flat': True,
 
     'nocheckcertificate': True,
     #'ignoreerrors': False,
     #'logtostderr': False,
     #'quiet': True,
     #'no_warnings': True,
-    'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes
-
-}
-ytdl_playlist_format_options = {
-    'format': 'bestaudio',
-    'postprocessors': [{
-    'key': 'FFmpegExtractAudio',
-    'preferredcodec': 'wav',
-    'preferredquality': '256',
-    }],
-    'outtmpl': 'song.%(ext)s',
-    #'external-downloader': 'aria2c',
-    #'external-downloader-args': "-x 16 -s 16 -k 1M",
-    'restrictfilenames': True,
-
-    'default_search':"auto",
-    'skip_download': True,
-    'flat-playlist': True,
-    #'no-flat-playlist': True,
-    #'extract_flat': True,
-
-    'nocheckcertificate': True,
+    'default_search': 'auto',
     'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes
 }
 
@@ -199,7 +174,6 @@ ffmpeg_options = {
 }
 
 ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
-ytdl_playlist = yt_dlp.YoutubeDL(ytdl_playlist_format_options)
 
 
 # class YTDLSource(discord.PCMVolumeTransformer):
@@ -292,8 +266,7 @@ class MIRTIN(commands.Cog):
             count = 0
             for song in songs:
                 count +=1
-                song_list.append(' : '.join(song.get_text("‽").split("‽")))
-            print(song_list)
+                song_list.append(song.get_text("‽").split("‽"))
             return(song_list)
         if(type == "music.song"):
             title = str(soup.find("meta", property="og:title")["content"])
@@ -302,26 +275,30 @@ class MIRTIN(commands.Cog):
 
 
 
-    async def search(self, ctx, query):
-        stream = True
-        songs = []
-        if query.startswith("https://youtube.com/") or query.startswith("https://www.youtube.com/") or query.startswith("www.youtube.com/") or query.startswith("youtube.com/"): #Proper URL
-            #Proper URL
-            url = query
-        else: #Search Required
-            ytdl_data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch:{query}", download=not stream))
-            url = ytdl_data["entries"][0]["url"]
-
-        ytdl_data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
-        if ytdl_data["url"].startswith("https://www.youtube.com/"): #Playlist:
-            #Reprocess URL
-            await ctx.send("Loading Playlist...")
-            ytdl_data = await self.bot.loop.run_in_executor(None, lambda: ytdl_playlist.extract_info(ytdl_data["url"], download=not stream))
-            return(ytdl_data['entries'])
-
-        else: #Song:
-            #print(ytdl_data)
-            return([ytdl_data])
+    async def search(self, query):
+        searchurl = "https://www.youtube.com/results?search_query=" + str(query).replace(" ", "+")
+        result = requests.get(searchurl)
+        data = result.text.partition("var ytInitialData = ")[-1].partition("</script>")[0].replace(";","")
+        details = json.loads(data)
+        content = details["contents"]["twoColumnSearchResultsRenderer"]["primaryContents"]["sectionListRenderer"]["contents"][0]["itemSectionRenderer"]["contents"]
+        vidlist = ""
+        video = ""
+        for c in content:
+            try:
+                video = c["videoRenderer"]
+                break
+            except:
+                continue
+        data = {}
+        if video != "":
+            data["id"] = video["videoId"]
+            #data["url"] = "https://www.youtube.com/watch?v=" + video["videoId"]
+            data["title"] = video["title"]["runs"][0]["text"]
+            #data["author"] = video["longBylineText"]["runs"][0]["text"]
+        else:
+            data["id"] = ""
+            data["title"] = ""
+        return data
 
     async def del_song(self,ctx):
         server_id = ctx.message.guild.id
@@ -332,33 +309,22 @@ class MIRTIN(commands.Cog):
         server_id = ctx.message.guild.id
         if len(self.queue[server_id].queue) >= 1:
             url = self.queue[server_id].queue[0].ytdl_data["url"]
-            #print("URL YTDL DATA:")
-            #print(url)
             stream = True
             #If opus == True, volume commands will not work.
             if opus:
                 self.players[server_id][0] = discord.FFmpegOpusAudio(url, **ffmpeg_options)
-                print("opus")
             if not opus:
                 self.players[server_id][0] = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(url, **ffmpeg_options))
-                print("not opus")
-            print("audio init")
 
             if (ctx.message.guild.voice_client).is_connected() == False:
                 await (ctx.message.guild.voice_client).connect(reconnect = True,timeout = 60.0)
 
             if ctx.voice_client.is_playing():
-                print("PASS")
                 pass
             elif not ctx.voice_client.is_playing():
-<<<<<<< HEAD
                 self.players[server_id][1] = timer(self.queue[server_id].queue[0])
-=======
-                print("STARTING PLAY")
-                self.players[server_id][1] = timer()
->>>>>>> 18c8300d53a0eca01e6f86eb999c934befdf6365
                 ctx.voice_client.play(self.players[server_id][0], after=lambda e: print(f'Player error: {e}') if e else self.bot.loop.create_task(self.del_song(ctx)))
-                await ctx.send('Now playing: {}'.format(self.queue[server_id][0].ytdl_data["title"]))
+                await ctx.send('Now playing: {}'.format(self.queue[server_id][0].data["title"]))
 
 
         else:
@@ -388,7 +354,6 @@ class MIRTIN(commands.Cog):
         else:
             return await ctx.send("Not in a VC")
 
-<<<<<<< HEAD
     async def generate_song(self, search):
         data = await self.search(search)
         id = data["id"]
@@ -410,15 +375,13 @@ class MIRTIN(commands.Cog):
         self.queue[server_id].add(old_song)
         voice_channel.stop()
 
-=======
->>>>>>> 18c8300d53a0eca01e6f86eb999c934befdf6365
     @commands.command(aliases = ['p','P','Play'])
-    async def play(self, ctx, *, query=""):
+    async def play(self, ctx, *, search=""):
         """Processes a song request and passes it to the queue, starts playing if empty queue"""
         await self.handle(ctx)
         server_id = ctx.guild.id
         voice_client = ctx.voice_client
-        if len(query) == 0:
+        if len(search) == 0:
             voice_channel = ctx.message.guild.voice_client
             if voice_channel.is_paused():
                 await ctx.send("Unpausing...")
@@ -436,26 +399,20 @@ class MIRTIN(commands.Cog):
         if not ctx.author.voice:
             await ctx.send("User is not in a voice channel")
             return()
-<<<<<<< HEAD
         if not voice_client:
             await self.join(ctx)
         #Ensure voice and switch to channel of request
         await self.ensure_voice(ctx)
-=======
-        #if not voice_client:
-        await self.join(ctx)
->>>>>>> 18c8300d53a0eca01e6f86eb999c934befdf6365
         url_flag = ""
         #yt_url_check = ["youtube.com/watch?v=", "http://youtube.com/watch?v=", "https://youtube.com/watch?v="]
         spot_url_check = ["https://open.spotify.com/"]
         async with ctx.typing():
-
             for i in spot_url_check:
-                if i in query:
+                if i in search:
                     url_flag = "spot"
 
-            if url_flag == "spot": #SPOTIFY LINK
-                songs_list = await self.spotify(query)
+            if url_flag == "spot":
+                songs_list = await self.spotify(search)
                 total = len(songs_list)
                 count = 0
                 #Progress Bar for Playlists:
@@ -469,8 +426,8 @@ class MIRTIN(commands.Cog):
                 prog_msg = await ctx.send(prog_str)
 
                 for name in songs_list:
-                    song_data = await self.search(ctx, name)
-                    song = Song(song_data[0]) #NO PLAYLIST
+                    song = await self.generate_song(name)
+                    print(song.data["title"])
                     await (self.queue[server_id]).add(song)
                     count += 1
                     prog_frac = (count/total)
@@ -478,29 +435,9 @@ class MIRTIN(commands.Cog):
                     prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
                     await prog_msg.edit(content = prog_str)
 
-            else: #All other playlists
-                songs = []
-                songs_data = await self.search(ctx, query)
-                for song_data in songs_data:
-                    songs.append(Song(song_data))
-
-                #Progress Bar for Playlists:
-                count = 0
-                total = len(songs)
-                prog_size = 10
-                prog_char = "█"
-                incomp_char   = "░"
-                prog_frac = (count/total)
-                prog_num = math.floor(prog_frac*prog_size)
-                prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
-                prog_msg = await ctx.send(prog_str)
-                for song in songs:
-                    await (self.queue[server_id]).add(song)
-                    count += 1
-                    prog_frac = (count/total)
-                    prog_num = math.floor(prog_frac*prog_size)
-                    prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
-                    await prog_msg.edit(content = prog_str)
+            else:
+                song = await self.generate_song(search)
+                await (self.queue[server_id]).add(song)
 
             if len(self.queue[server_id].queue) == 1:
                 print("First song in Queue...")
@@ -519,6 +456,7 @@ class MIRTIN(commands.Cog):
             print("Skipping...")
             await ctx.send("Skipping...")
             voice_channel.stop()
+            #voice_channel = server.voice_client
 
     @commands.command()
     async def filter_complex(self, ctx, *filter_str):
@@ -735,13 +673,13 @@ class MIRTIN(commands.Cog):
             lensongs = len(self.queue[server_id].queue)
         if len(self.queue[server_id].queue) > 0:
             embed = discord.Embed(title="Queue:",description=f"Showing up to next {lensongs} tracks, {len(self.queue[server_id].queue)} songs in total",colour=ctx.author.colour)
-            embed.add_field(name="Currently playing:",value=self.queue[server_id][0].ytdl_data["title"], inline=False)
+            embed.add_field(name="Currently playing:",value=self.queue[server_id][0].data["title"], inline=False)
         else:
             embed = discord.Embed(title="Queue:",description=f"Empty",colour=ctx.author.colour)
         if len(self.queue[server_id].queue) > 1:
             embed.add_field(
                 name="Next up:",
-                value=("\n".join(self.queue[server_id][i].ytdl_data["title"] for i in range(1, lensongs))),
+                value=("\n".join(self.queue[server_id][i].data["title"] for i in range(1, lensongs))),
                 inline=False
             )
             if len(self.queue[server_id].queue) > lensongs:
@@ -800,7 +738,6 @@ class MIRTIN(commands.Cog):
         await ctx.send("Cleared Queue")
 
     @play.before_invoke
-    #@play_next.before_invoke
     async def ensure_voice(self, ctx):
         await self.handle(ctx)
         if ctx.voice_client is None:
@@ -816,7 +753,7 @@ class Queue(MIRTIN):
     def __init__(self):
         self.loop = False
         self.queue = []
-        self.last_song = Song(0)
+        self.last_song = Song(0,0)
 
     def __setitem__(self, index, data):
         self.queue[index] = data
@@ -832,14 +769,9 @@ class Queue(MIRTIN):
     def remove(self, index):
         song = self.queue.pop(index)
         print("REMOVED:")
-        print(song.ytdl_data["title"])
+        print(song.data["title"])
         print("END REMOVED, RETURNING...")
         return(song)
-
-    def move(self, index1, index2):
-        song = self.queue.pop(index)
-        self.queue.insert(index2, song)
-        return
 
     def shuffle(self):
         if len(self.queue) > 1:
@@ -855,9 +787,8 @@ class Queue(MIRTIN):
                 self.queue.insert(current_pos, current_new)
 
 class Song(Queue):
-    def __init__(self, ytdl_data):
+    def __init__(self, ytdl_data, data):
         self.ytdl_data = ytdl_data
-<<<<<<< HEAD
         if ytdl_data != 0:
             self.duration = ytdl_data.get('duration')
         else:
@@ -891,8 +822,6 @@ class timer(Queue):
         self.start = self.start - prev
     async def move_forward(self, prev):
         self.start = self.start + prev
-=======
->>>>>>> 18c8300d53a0eca01e6f86eb999c934befdf6365
 
 bot = commands.Bot(command_prefix=commands.when_mentioned_or("-"), description='MIRTIN: Music Bot')
 

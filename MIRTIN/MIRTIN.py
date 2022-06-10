@@ -36,18 +36,26 @@ opus = False
 # }
 
 #https://ffmpeg.org/ffmpeg-filters.html
+def load_custom(filename,filter):
+    #filters = open(filename).readlines()
+    #for line in filters:
+        #line_list = line.strip().split(",")
+        #if line_list[0] == filter
+            #custom = line_list[1]
+            #docs = line_list[2]
+    return()
 filter_dict = {
     "compressor": ["acompressor",["mode: (upward, downward)","ratio: (1-20)","mix: (0-1)"]],
     "contrast" : ["acontrast",["contrast: (0-100)"]],
-    "crusher": ["acrusher",["bits: (bit reduction num)","mix: (mix amount num)","mode: (lin, log)"]], #mode = "lin" or "log"
-    "declick": ["adeclick",[]],
-    "dyn_equalizer": ["adynamicequalizer",[]],
+    "crusher": ["acrusher",["bits: (bit reduction)","mix: (mix amount)","mode: (lin, log)"]], #mode = "lin" or "log"
+    "declick": ["adeclick",["w (window): (10-100)", "o (overlap): (50-95)", "t (threshold): (1-100)"]],
+    #"dyn_equalizer": ["adynamicequalizer",[]],
     "dyn_smooth": ["adynamicsmooth",[]],
     "echo": ["aecho",["in_gain: (def = 0.6)", "out_gain: (def = 0.3)", "delays: (in ms)", "decays: (loudness of echos, def=0.5)"]],
     "exciter": ["aexciter",[]],
     "fft_denoise": ["afftdn",[]],
-    "freq_shift": ["afreqshift",[]],
-    "wavelet_denoise": ["afwtdn",[]],
+    "freq_shift": ["afreqshift",["shift: (-inf to inf)", "level: (0-1)", "order: (1-16)"]],
+    #"wavelet_denoise": ["afwtdn",[]],
     "limiter": ["alimiter",[]],
     "allpass": ["allpass",[]],
     "phaser": ["aphaser",[]],
@@ -70,8 +78,8 @@ filter_dict = {
     "compand": ["compand",[]],
     "crossfeed": ["crossfeed",[]],
     "crystalizer": ["crystalizer",[]],
-    "enhance_dialogue": ["dialoguenhance",[]],
-    "dyn_normalize": ["dynaudnorm",[]],
+    #"enhance_dialogue": ["dialoguenhance",[]],
+    #"dyn_normalize": ["dynaudnorm",[]],
     "earwax": ["earwax",[]],
     "equalizer": ["equalizer",[]],
     "extra_stereo": ["extrastereo",[]],
@@ -86,8 +94,9 @@ filter_dict = {
     "stereowiden": ["stereowiden",[]],
     "surround": ["surround",[]],
     "treble": ["treble",[]],
-    "tremolo": ["tremolo",["f", "d"], ["f = frequency (5), d = depth (0.5)"]],
-    "vibrato": ["vibrato",["f", "d"], ["f = frequency (5), d = depth (0.5)"]],
+    "tremolo": ["tremolo",["f = frequency (5)", "d = depth (0.5)"]],
+    "vibrato": ["vibrato",["f = frequency (5)", "d = depth (0.5)"]],
+    "custom": []
 }
 
 ytdl_format_options = {
@@ -192,19 +201,6 @@ ffmpeg_options = {
 ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
 ytdl_playlist = yt_dlp.YoutubeDL(ytdl_playlist_format_options)
 
-class timer():
-    def __init__(self):
-        self.start = time.time()
-        self.end = self.start
-    def elapsed(self):
-        self.end = time.time()
-        return(self.end-self.start)
-    def reset(self):
-        self.start = time.time()
-    async def move_back(self, prev):
-        self.start = self.start - prev
-    async def move_forward(self, prev):
-        self.start = self.start + prev
 
 # class YTDLSource(discord.PCMVolumeTransformer):
 #     def __init__(self, source, *, data, volume=0.5):
@@ -276,7 +272,7 @@ class MIRTIN(commands.Cog):
 
         if server_id not in self.players:
             #print("RESET PLAYING")
-            self.players[server_id] = [0,timer()]
+            self.players[server_id] = [0,timer(0)]
 
         # if server_id not in self.loops:
         #     print("RESET LOOPS")
@@ -355,10 +351,15 @@ class MIRTIN(commands.Cog):
                 print("PASS")
                 pass
             elif not ctx.voice_client.is_playing():
+<<<<<<< HEAD
+                self.players[server_id][1] = timer(self.queue[server_id].queue[0])
+=======
                 print("STARTING PLAY")
                 self.players[server_id][1] = timer()
+>>>>>>> 18c8300d53a0eca01e6f86eb999c934befdf6365
                 ctx.voice_client.play(self.players[server_id][0], after=lambda e: print(f'Player error: {e}') if e else self.bot.loop.create_task(self.del_song(ctx)))
                 await ctx.send('Now playing: {}'.format(self.queue[server_id][0].ytdl_data["title"]))
+
 
         else:
             print("End of queue")
@@ -387,6 +388,30 @@ class MIRTIN(commands.Cog):
         else:
             return await ctx.send("Not in a VC")
 
+<<<<<<< HEAD
+    async def generate_song(self, search):
+        data = await self.search(search)
+        id = data["id"]
+        url = "https://youtube.com/watch?v="+id
+        stream = True
+        ytdl_data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+        #ytdl_data = await ytdl.extract_info(url, download=not stream)
+        song = Song(ytdl_data, data)
+        return(song)
+    @commands.command(aliases = ['pp'])
+    async def play_priority(self, ctx, *, search=""):
+        server = ctx.message.guild
+        voice_channel = server.voice_client
+        server_id = server.id
+        await self.play(ctx, search=search)
+        new_song = self.queue[server_id].queue.pop(-1)
+        self.queue[server_id].insert(1,new_song)
+        old_song = self.queue[server_id].queue.pop(0)
+        self.queue[server_id].add(old_song)
+        voice_channel.stop()
+
+=======
+>>>>>>> 18c8300d53a0eca01e6f86eb999c934befdf6365
     @commands.command(aliases = ['p','P','Play'])
     async def play(self, ctx, *, query=""):
         """Processes a song request and passes it to the queue, starts playing if empty queue"""
@@ -411,8 +436,15 @@ class MIRTIN(commands.Cog):
         if not ctx.author.voice:
             await ctx.send("User is not in a voice channel")
             return()
+<<<<<<< HEAD
+        if not voice_client:
+            await self.join(ctx)
+        #Ensure voice and switch to channel of request
+        await self.ensure_voice(ctx)
+=======
         #if not voice_client:
         await self.join(ctx)
+>>>>>>> 18c8300d53a0eca01e6f86eb999c934befdf6365
         url_flag = ""
         #yt_url_check = ["youtube.com/watch?v=", "http://youtube.com/watch?v=", "https://youtube.com/watch?v="]
         spot_url_check = ["https://open.spotify.com/"]
@@ -534,6 +566,47 @@ class MIRTIN(commands.Cog):
         self.queue[server_id].queue.insert(0,song)
 
     @commands.command()
+    async def seek(self, ctx, time):
+        url = self.queue[server_id][0].ytdl_data["url"]
+        stream=True
+        #ffmpeg_options_custom['options'] += '"' + filter_str.strip(",")+ '"'
+        if len(filter_str) > 0:
+            ffmpeg_options_custom['options'] += "-af:a "
+            ffmpeg_options_custom['options'] += filter_str.strip(",")
+        print(ffmpeg_options_custom)
+        current_time_str = time.strftime('%H:%M:%S.', time.gmtime(current_time)) + (str(current_time).split(".")[1])[0:2]
+        print(current_time_str)
+        ffmpeg_options_custom['before_options'] = ffmpeg_options['before_options'] + f" -ss {current_time_str}"
+        voice_channel = ctx.message.guild.voice_client
+        if voice_channel is None:
+            voice_channel = await ctx.author.voice.channel.connect()
+        else:
+            await voice_channel.move_to(ctx.author.voice.channel)
+        song = self.queue[server_id][0] #Get playing song
+        voice_channel.stop() #We will need to re-insert song into queue
+        if (ctx.message.guild.voice_client).is_connected() == False:
+            await (ctx.message.guild.voice_client).connect(reconnect = True,timeout = 60.0)
+        self.players[server_id][0] = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(url, **ffmpeg_options_custom))
+
+
+        ctx.voice_client.play(self.players[server_id][0], after=lambda e: print(f'Player error: {e}') if e else self.bot.loop.create_task(self.del_song(ctx)))
+
+        print(self.players[server_id][1].elapsed())
+        self.queue[server_id].queue.insert(0,song)
+
+    @commands.command()
+    async def elapsed(self,ctx):
+        await self.handle(ctx)
+        server_id = ctx.message.guild.id
+        voice_channel = ctx.message.guild.voice_client
+        if voice_channel.is_paused():
+            self.players[server_id][1].reset()
+        prog1 = str(round((self.players[server_id][1]).elapsed()))+" / "+str(round(self.queue[server_id][0].duration))
+        percent = "("+str(round(self.players[server_id][1].elapsed()/self.queue[server_id][0].duration*100))+"%)"
+        mins_remaining = str(round((self.queue[server_id][0].duration-self.players[server_id][1].elapsed())/60,2))
+        await ctx.send(prog1+ " "+percent+" "+mins_remaining+" minutes remaining...")
+
+    @commands.command()
     async def filter(self, ctx, *filter_lists):
         """Filter audio: help to see all, help <filtername> to see specific"""
         """https://ffmpeg.org/ffmpeg-filters.html"""
@@ -541,7 +614,6 @@ class MIRTIN(commands.Cog):
         #-filter:a <filter>= <var>=<val>:<var2>=<val2>
 
         await self.handle(ctx)
-        operation_time = timer()
         server_id = ctx.message.guild.id
         print("START TIMER ELAPSED:")
         current_time = (self.players[server_id][1]).elapsed()
@@ -554,7 +626,7 @@ class MIRTIN(commands.Cog):
         filter_lists = filter_lists.split(",")
         print("FILTER LISTS:")
         print(filter_lists)
-
+        self.queue[server_id].queue[0].speed = 1
         filter_str = ""
         for filter_list in filter_lists:
             filter_list = filter_list.strip(" ").split(" ")
@@ -562,6 +634,19 @@ class MIRTIN(commands.Cog):
             if len(filter_list)>=1:
                 filter_type = filter_list.pop(0)
                 print(filter_type)
+                if filter_type == "rate":
+                    print(filter_list)
+                    speed = float(filter_list[0])
+                    self.queue[server_id].queue[0].speed = speed
+                    print(speed)
+                    speed=speed*44100
+                    print(speed)
+                    filter_list[0] = str(round(speed))
+                    print(filter_list)
+                if filter_type == "tempo":
+                    print(filter_list)
+                    speed = float(filter_list[0])
+                    self.queue[server_id].queue[0].speed = speed
                 if filter_type not in filter_dict:
                     if filter_type == "help":
                         if len(filter_list) == 0:
@@ -633,7 +718,7 @@ class MIRTIN(commands.Cog):
 
 
         ctx.voice_client.play(self.players[server_id][0], after=lambda e: print(f'Player error: {e}') if e else self.bot.loop.create_task(self.del_song(ctx)))
-        func_time = operation_time.elapsed()
+
         #self.bot.loop.create_task(self.players[server_id][1].move_back(current_time))
         #self.bot.loop.create_task(self.players[server_id][1].move_back(func_time))
         #self.bot.loop.create_task(self.players[server_id][1].move_forward(func_time))
@@ -740,6 +825,9 @@ class Queue(MIRTIN):
     async def add(self, song):
         self.queue.append(song)
         return
+    async def insert(self, index, song):
+        self.queue.insert(index,song)
+        return
 
     def remove(self, index):
         song = self.queue.pop(index)
@@ -758,17 +846,53 @@ class Queue(MIRTIN):
             current = self.queue[0]
             random.shuffle(self.queue)
             current_pos = self.queue.index(current)
-            current_new = self.queue[0]
-            newpos = 0
+            #current_new = self.queue[0]
+            #current_new = 0
             if len(self.queue)>1:
-                current = self.queue.pop(currentpos)
-                newcurrent = self.queue.pop(newpos)
-                self.queue.insert(newpos, current)
-                self.queue.insert(currentpos, newcurrent)
+                current = self.queue.pop(current_pos)
+                current_new = self.queue.pop(0)
+                self.queue.insert(0, current)
+                self.queue.insert(current_pos, current_new)
 
 class Song(Queue):
     def __init__(self, ytdl_data):
         self.ytdl_data = ytdl_data
+<<<<<<< HEAD
+        if ytdl_data != 0:
+            self.duration = ytdl_data.get('duration')
+        else:
+            self.duration = 0
+        self.data = data
+        self.elapsed = 0 #song time elapsed
+        self.speed = 1
+    def get_speed(self):
+        return(self.speed)
+    def set_speed(self, speed):
+        self.speed = speed
+        #self.duration = ytdl_data['duration'] #song duration, 'duration' in dict
+        #print(self.duration)
+class timer(Queue):
+    def __init__(self, song):
+        super().__init__()
+        self.start = time.time()
+        self.end = self.start
+        self.ongoing = 0 #ongoing
+        self.song = song
+    def elapsed(self):
+        self.end = time.time()
+        current = self.ongoing + (self.end-self.start)*self.song.get_speed()
+        print(self.song.get_speed())
+        self.reset()
+        self.ongoing = current
+        return(current)
+    def reset(self):
+        self.start = time.time()
+    async def move_back(self, prev):
+        self.start = self.start - prev
+    async def move_forward(self, prev):
+        self.start = self.start + prev
+=======
+>>>>>>> 18c8300d53a0eca01e6f86eb999c934befdf6365
 
 bot = commands.Bot(command_prefix=commands.when_mentioned_or("-"), description='MIRTIN: Music Bot')
 

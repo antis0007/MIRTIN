@@ -365,15 +365,22 @@ class MIRTIN(commands.Cog):
         return(song)
     @commands.command(aliases = ['pp'])
     async def play_priority(self, ctx, *, search=""):
+        await asyncio.gather(self.play(ctx, search=search))
+        await self.swap_last(ctx)
+    async def swap_last(self, ctx):
         server = ctx.message.guild
         voice_channel = server.voice_client
         server_id = server.id
-        await self.play(ctx, search=search)
         new_song = self.queue[server_id].queue.pop(-1)
-        self.queue[server_id].insert(1,new_song)
-        old_song = self.queue[server_id].queue.pop(0)
-        self.queue[server_id].add(old_song)
-        voice_channel.stop()
+        print("NEW SWAP SONG")
+        print(new_song.data["title"])
+        #old_song = self.queue[server_id].queue.pop(0)
+        if len(self.queue[server_id].queue) <= 1:
+            await self.queue[server_id].add(new_song)
+        else:
+            await self.queue[server_id].insert(1,new_song)
+        #await self.queue[server_id].add(old_song)
+        #voice_channel.stop()
 
     @commands.command(aliases = ['p','P','Play'])
     async def play(self, ctx, *, search=""):
@@ -505,6 +512,10 @@ class MIRTIN(commands.Cog):
 
     @commands.command()
     async def seek(self, ctx, time):
+        await self.handle(ctx)
+        server_id = ctx.message.guild.id
+        voice_channel = ctx.message.guild.voice_client
+
         url = self.queue[server_id][0].ytdl_data["url"]
         stream=True
         #ffmpeg_options_custom['options'] += '"' + filter_str.strip(",")+ '"'
@@ -515,7 +526,7 @@ class MIRTIN(commands.Cog):
         current_time_str = time.strftime('%H:%M:%S.', time.gmtime(current_time)) + (str(current_time).split(".")[1])[0:2]
         print(current_time_str)
         ffmpeg_options_custom['before_options'] = ffmpeg_options['before_options'] + f" -ss {current_time_str}"
-        voice_channel = ctx.message.guild.voice_client
+
         if voice_channel is None:
             voice_channel = await ctx.author.voice.channel.connect()
         else:
@@ -665,21 +676,33 @@ class MIRTIN(commands.Cog):
 
 
     @commands.command(aliases = ['q','Q','Queue'], brief="Lists the queue")
-    async def queue(self, ctx):
-        server_id = ctx.message.guild.id
+    async def queue(self, ctx, opts=""):
         await self.handle(ctx)
+        server_id = ctx.message.guild.id
+        count = 1
         lensongs = 5
+        if opts == "all":
+            lensongs = len(self.queue[server_id].queue)
+        elif opts != "":
+            opts = int(opts)
+            lensongs = opts
+
         if lensongs > len(self.queue[server_id].queue):
             lensongs = len(self.queue[server_id].queue)
         if len(self.queue[server_id].queue) > 0:
             embed = discord.Embed(title="Queue:",description=f"Showing up to next {lensongs} tracks, {len(self.queue[server_id].queue)} songs in total",colour=ctx.author.colour)
-            embed.add_field(name="Currently playing:",value=self.queue[server_id][0].data["title"], inline=False)
+            embed.add_field(name="Currently playing:",value="[1] "+self.queue[server_id][0].data["title"], inline=False)
         else:
             embed = discord.Embed(title="Queue:",description=f"Empty",colour=ctx.author.colour)
         if len(self.queue[server_id].queue) > 1:
+            val = ""
+            for i in range(1, lensongs):
+                val += f"[{i+1}] " + self.queue[server_id][i].data["title"] + "\n"
+
             embed.add_field(
                 name="Next up:",
-                value=("\n".join(self.queue[server_id][i].data["title"] for i in range(1, lensongs))),
+                #value=("\n".join(self.queue[server_id][i].data["title"] for i in range(1, lensongs))),
+                value=val,
                 inline=False
             )
             if len(self.queue[server_id].queue) > lensongs:
@@ -727,7 +750,7 @@ class MIRTIN(commands.Cog):
         self.queue[server_id].shuffle()
         await ctx.send("Shuffled Queue")
 
-    @commands.command()
+    @commands.command(aliases = ['c','C','Clear'])
     async def clear(self, ctx):
         """Removes all songs in queue after current song"""
         await self.handle(ctx)
@@ -736,6 +759,18 @@ class MIRTIN(commands.Cog):
         self.queue[server_id].queue = []
         self.queue[server_id].queue.append(current)
         await ctx.send("Cleared Queue")
+
+    @commands.command(aliases = ['r','R','Remove'])
+    async def remove(self, ctx, index=-1):
+        """Removes a song in queue"""
+        await self.handle(ctx)
+        server_id = ctx.message.guild.id
+        if(((index-1)<=0) or ((index-1)>len(self.queue[server_id].queue)-1)):
+            await ctx.send("INVALID POSITION")
+            return()
+        title = self.queue[server_id].queue[index-1].data["title"]
+        self.queue[server_id].remove(index-1)
+        await ctx.send("Removed "+title+" from Queue")
 
     @play.before_invoke
     async def ensure_voice(self, ctx):

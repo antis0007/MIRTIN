@@ -1,4 +1,5 @@
 import asyncio
+from asyncio import sleep
 import discord
 import yt_dlp
 #from yt_dlp import YoutubeDL
@@ -12,6 +13,7 @@ import threading
 import math
 import random
 import datetime
+import copy
 
 yt_dlp.utils.bug_reports_message = lambda: ''
 
@@ -101,7 +103,8 @@ filter_dict = {
 }
 
 ytdl_format_options = {
-    'format': 'bestaudio',
+    #'format': 'bestaudio',
+    'format': 'ba/b',
     'postprocessors': [{
     'key': 'FFmpegExtractAudio',
     'preferredcodec': 'wav',
@@ -129,7 +132,8 @@ ytdl_format_options = {
 
 }
 ytdl_playlist_format_options = {
-    'format': 'bestaudio',
+    #'format': 'bestaudio',
+    'format': 'ba/b',
     'postprocessors': [{
     'key': 'FFmpegExtractAudio',
     'preferredcodec': 'wav',
@@ -142,7 +146,8 @@ ytdl_playlist_format_options = {
 
     'default_search':"auto",
     'skip_download': True,
-    'flat-playlist': True,
+    #'flat-playlist': False,
+    'flat-playlist': True, #ORIGINAL FOR FASTER LOADING!
     #'no-flat-playlist': True,
     #'extract_flat': True,
 
@@ -234,20 +239,27 @@ class MIRTIN(commands.Cog):
     async def spotify(self, url):
         req = requests.get(url, 'html.parser')
         soup = BeautifulSoup( req.content , 'html.parser')
-        type = str(soup.find("meta", property="og:type")["content"])
-        if(type == "music.playlist"):
-            songs = soup.find_all(type="track")
+        print(soup.html)
+        type_var = soup.find("meta", attrs={'property': 'og:type'})["content"]
+        print(type_var)
+        if not type_var:
+            return(None)
+
+        if(type_var == "music.playlist"):
+            #songs = soup.findAll("meta", attrs={'name':'music:song'})
+            songs = soup.findAll("button", attrs={'data-testid':"entity-row-v2-button"})
             songs = list(songs)
             song_list = []
 
             count = 0
             for song in songs:
+                print(song)
                 count +=1
                 song_list.append(" : ".join(song.get_text("‽").split("‽")))
             return(song_list)
-        if(type == "music.song"):
-            title = str(soup.find("meta", property="og:title")["content"])
-            desc = str(soup.find("meta", property="og:description")["content"])
+        if(type_var == "music.song"):
+            title = str(soup.find("meta", attrs={'property': 'og:title'})["content"])
+            desc = str(soup.find("meta", attrs={'property': 'og:description'})["content"])
             return([title+" : "+desc])
 
     # async def search(self, query):
@@ -321,12 +333,16 @@ class MIRTIN(commands.Cog):
         else:
             print("End of queue")
             await ctx.send("End of queue")
+        
 
     @commands.command()
     async def join(self, ctx, *args):
         """Joins a voice channel"""
         await self.handle(ctx)
-        channel = ctx.author.voice.channel
+        voice = ctx.author.voice
+        if not voice:
+            return await ctx.send("Not connected to a voice channel.")
+        channel = voice.channel
         if ctx.voice_client is not None:
             return await ctx.voice_client.move_to(channel)
 
@@ -341,7 +357,7 @@ class MIRTIN(commands.Cog):
             return await ctx.voice_client.disconnect()
             return await ctx.send("Disconnected")
         else:
-            return await ctx.send("Not in a VC")
+            return await ctx.send("Not connected to a voice channel.")
 
     async def generate_song(self, ctx, search):
         """Generates a song object from a search query"""
@@ -370,14 +386,40 @@ class MIRTIN(commands.Cog):
         else:
             await self.queue[server_id].insert(pos,new_song)
 
-    @commands.command(aliases = ['p','P','Play'])
+    @commands.command(aliases = ['prev'])
+    async def previous(self, ctx):
+        server_id = ctx.message.guild.id
+        server = ctx.message.guild
+        voice_channel = server.voice_client
+        if not voice_channel:
+            await self.join(ctx)
+            voice_channel = ctx.message.guild.voice_client
+            if not voice_channel:
+                return
+        if len(self.queue[server_id].queue)>0:
+            current = self.queue[server_id].queue[0]
+            await self.queue[server_id].add(current)
+            await self.insert_last(ctx)
+        if self.queue[server_id].last_song == None:
+            await ctx.send("Invalid Song")
+            return
+        await self.queue[server_id].add(self.queue[server_id].last_song)
+        await self.insert_last(ctx)
+        voice_channel.stop()
+
+        #await self.queue[server_id].insert(1,new_song)
+    @commands.command(aliases = ['p'])
     async def play(self, ctx, *, query=""):
         """Processes a song request and passes it to the queue, starts playing if empty queue"""
         await self.handle(ctx)
         server_id = ctx.guild.id
         voice_client = ctx.voice_client
-        if len(query) == 0:
+        voice_channel = ctx.message.guild.voice_client
+        if not voice_channel:
+            await self.join(ctx)
             voice_channel = ctx.message.guild.voice_client
+        if len(query) == 0:
+
             if voice_channel.is_paused():
                 await ctx.send("Unpausing...")
                 voice_channel.resume()
@@ -395,87 +437,107 @@ class MIRTIN(commands.Cog):
             await ctx.send("User is not in a voice channel")
             return()
         #if not voice_client:
-        await self.join(ctx)
+
         url_flag = ""
         #yt_url_check = ["youtube.com/watch?v=", "http://youtube.com/watch?v=", "https://youtube.com/watch?v="]
         spot_url_check = ["https://open.spotify.com/"]
-        async with ctx.typing():
 
-            for i in spot_url_check:
-                if i in query:
-                    url_flag = "spot"
 
-            if url_flag == "spot": #SPOTIFY LINK
-                songs_list = await self.spotify(query)
-                total = len(songs_list)
-                count = 0
-                #Progress Bar for Playlists:
-                prog_size = 10
-                prog_char = "█"
-                incomp_char   = "░"
+        for i in spot_url_check:
+            if i in query:
+                url_flag = "spot"
 
+        if url_flag == "spot": #SPOTIFY LINK
+            songs_list = await self.spotify(query)
+            if not songs_list:
+                print("Unknown Spotify Error")
+                await ctx.send("Unknown Spotify Error")
+                return
+            total = len(songs_list)
+            count = 0
+            #Progress Bar for Playlists:
+            prog_size = 10
+            prog_char = "█"
+            incomp_char   = "░"
+
+            prog_frac = (count/total)
+            prog_num = math.floor(prog_frac*prog_size)
+            prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
+            prog_msg = await ctx.send(prog_str)
+
+            for name in songs_list:
+
+                song_data = await self.search(ctx, name)
+                song = Song(song_data[0]) #NO PLAYLIST
+                await (self.queue[server_id]).add(song)
+                count += 1
                 prog_frac = (count/total)
                 prog_num = math.floor(prog_frac*prog_size)
                 prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
-                prog_msg = await ctx.send(prog_str)
+                await prog_msg.edit(content = prog_str)
 
+        else: #All other playlists
+            songs_data = await self.search(ctx, query)
+            #Progress Bar for Playlists:
+            count = 0
+            total = len(songs_data)
+            prog_size = 10
+            prog_char = "█"
+            incomp_char   = "░"
+            prog_frac = (count/total)
+            prog_num = math.floor(prog_frac*prog_size)
+            prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
+            prog_msg = await ctx.send(prog_str)
+            prog_msg_id = prog_msg.id
 
-                for name in songs_list:
-
-                    song_data = await self.search(ctx, name)
-                    song = Song(song_data[0]) #NO PLAYLIST
-                    await (self.queue[server_id]).add(song)
-                    count += 1
-                    prog_frac = (count/total)
-                    prog_num = math.floor(prog_frac*prog_size)
-                    prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
-                    await prog_msg.edit(content = prog_str)
-
-            else: #All other playlists
-                songs_data = await self.search(ctx, query)
-                #Progress Bar for Playlists:
-                count = 0
-                total = len(songs_data)
-                prog_size = 10
-                prog_char = "█"
-                incomp_char   = "░"
-                prog_frac = (count/total)
-                prog_num = math.floor(prog_frac*prog_size)
-                prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
-                prog_msg = await ctx.send(prog_str)
-
-                for song_data in songs_data:
-                    id = song_data["id"]
-                    url = "https://youtube.com/watch?v="+id
-                    #id = song_data["id"]
-                    #url = song_data["url"]
-                    #print("DATA:")
-                    #print(song_data)
-                    #print(song_data["url"])
-                    stream = True
+            print("SONGS DATA")
+            print(songs_data)
+            stream = True
+            #async with ctx.typing(): #NOT WORKING BECAUSE OF AUTOPLAY
+            for song_data in songs_data:
+                id = song_data["id"]
+                url = song_data["url"]
+                if url.startswith("https://www.youtube.com"):
                     ytdl_data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
                     song = Song(ytdl_data)
-                    await (self.queue[server_id]).add(song)
-                    count += 1
-                    prog_frac = (count/total)
-                    prog_num = math.floor(prog_frac*prog_size)
-                    prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
-                    await prog_msg.edit(content = prog_str)
+                else:
+                    song = Song(song_data)
+                #DO THIS BECAUSE PLAYLIST EXTRACTION FAILS ON YOUTUBE
+                await asyncio.gather(self.queue[server_id].add(song))
+                count += 1
+                prog_frac = (count/total)
+                prog_num = math.floor(prog_frac*prog_size)
+                prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
+                await prog_msg.edit(content = prog_str)
+                if not voice_channel.is_playing() and (len(self.queue[server_id].queue) == 1): #Play first song if not playing
+                    await self.play(ctx)
 
-            if len(self.queue[server_id].queue) == 1:
-                print("First song in Queue...")
-                await self.play_next(ctx)
-            else:
-                print("Added to queue!")
-                await ctx.send("Added to queue!")
+        if len(self.queue[server_id].queue) == 1:
+            print("First song in Queue...")
+            await self.play_next(ctx)
+        else:
+            print("Added to queue!")
+            await ctx.send("Added to queue!")
 
-    @commands.command(aliases = ['s','S','Skip'], brief="Skips a song")
+
+
+    @commands.command(aliases = ['s'], brief="Skips a song")
     async def skip(self, ctx):
         """Skips a song"""
+        await self.handle(ctx)
         server = ctx.message.guild
         voice_channel = server.voice_client
-        if not voice_channel.is_playing():
+        server_id = ctx.message.guild.id
+        if not voice_channel:
+            await self.join(ctx)
+            voice_channel = ctx.message.guild.voice_client
+            if not voice_channel:
+                return
+        if not voice_channel.is_playing() and len(self.queue[server_id].queue)>0:
             await self.play_next(ctx)
+        elif len(self.queue[server_id].queue)==0:
+            print("Queue is Empty")
+            await ctx.send("Queue is Empty")
         else:
             print("Skipping...")
             await ctx.send("Skipping...")
@@ -743,7 +805,7 @@ class MIRTIN(commands.Cog):
         self.queue[server_id].queue.insert(0,song)
 
 
-    @commands.command(aliases = ['q','Q','Queue'], brief="Lists the queue")
+    @commands.command(aliases = ['q'], brief="Lists the queue")
     async def queue(self, ctx, opts=""):
         await self.handle(ctx)
         server_id = ctx.message.guild.id
@@ -759,7 +821,7 @@ class MIRTIN(commands.Cog):
             lensongs = len(self.queue[server_id].queue)
         if len(self.queue[server_id].queue) > 0:
             embed = discord.Embed(title="Queue:",description=f"Showing up to next {lensongs} tracks, {len(self.queue[server_id].queue)} songs in total",colour=ctx.author.colour)
-            embed.add_field(name="Currently playing:",value="[1] "+self.queue[server_id][0].ytdl_data["title"], inline=False)
+            embed.add_field(name="Currently playing:",value="[1] "+self.queue[server_id].queue[0].ytdl_data["title"], inline=False)
         else:
             embed = discord.Embed(title="Queue:",description=f"Empty",colour=ctx.author.colour)
         if len(self.queue[server_id].queue) > 1:
@@ -776,9 +838,14 @@ class MIRTIN(commands.Cog):
             if len(self.queue[server_id].queue) > lensongs:
                 embed.set_footer(text="And " + str(len(self.queue[server_id].queue)-lensongs) + " more...")
         msg = await ctx.send(embed=embed)
+        #PERFORM REACTION VALIDATION USING EMBED TITLE
+        #await msg.add_reaction("⏮️")
+        #await msg.add_reaction("⏯️")
+        #await msg.add_reaction("⏭️")
+        await asyncio.gather(msg.add_reaction("⏮️"),msg.add_reaction("⏯️"),msg.add_reaction("⏭️"))
 
 
-    @commands.command(aliases = ['v','V','Volume'], brief="Changes bot volume for everyone")
+    @commands.command(aliases = ['v'], brief="Changes bot volume for everyone")
     async def volume(self, ctx, volume: int):
         """Changes global bot volume"""
         await self.handle(ctx)
@@ -800,6 +867,11 @@ class MIRTIN(commands.Cog):
         await self.handle(ctx)
         server = ctx.message.guild
         voice_channel = server.voice_client
+        if not voice_channel:
+            await self.join(ctx)
+            voice_channel = ctx.message.guild.voice_client
+            if not voice_channel:
+                return
         if voice_channel.is_paused():
             await ctx.send("Unpausing...")
             voice_channel.resume()
@@ -807,14 +879,14 @@ class MIRTIN(commands.Cog):
             await ctx.send("Paused...")
             voice_channel.pause()
 
-    @commands.command(aliases = ['Shuffle'])
+    @commands.command()
     async def shuffle(self, ctx):
         await self.handle(ctx)
         server_id = ctx.message.guild.id
         self.queue[server_id].shuffle()
         await ctx.send("Shuffled Queue")
 
-    @commands.command(aliases = ['c','C','Clear'])
+    @commands.command(aliases = ['c'])
     async def clear(self, ctx):
         """Removes all songs in queue after current song"""
         await self.handle(ctx)
@@ -824,7 +896,7 @@ class MIRTIN(commands.Cog):
         self.queue[server_id].queue.append(current)
         await ctx.send("Cleared Queue")
 
-    @commands.command(aliases = ['r','R','Remove'])
+    @commands.command(aliases = ['r'])
     async def remove(self, ctx, index=-1):
         """Removes a song in queue"""
         await self.handle(ctx)
@@ -852,7 +924,7 @@ class Queue(MIRTIN):
     def __init__(self):
         self.loop = False
         self.queue = []
-        self.last_song = Song(0)
+        self.last_song = None
 
     def __setitem__(self, index, data):
         self.queue[index] = data
@@ -923,12 +995,42 @@ class timer(Queue):
     async def move_forward(self, prev):
         self.start = self.start + prev
 
-bot = commands.Bot(command_prefix=commands.when_mentioned_or("-"), description='MIRTIN: Music Bot')
+bot = commands.Bot(command_prefix=commands.when_mentioned_or("-"), description='MIRTIN: Music Bot', case_insensitive=True)
 
 @bot.event
 async def on_ready():
     print('Logged in as {0} ({0.id})'.format(bot.user))
     print('------')
+@bot.event
+async def on_raw_reaction_add(payload):
+    channel = bot.get_channel(payload.channel_id)
+    message = await channel.fetch_message(payload.message_id)
+    ctx = await bot.get_context(message)
+    if len(message.embeds)==0:
+        return
+    if (message.author.id != bot.user.id) or (payload.member.id == bot.user.id):
+        return
+    if isinstance(channel, discord.DMChannel):
+        return
+    if message.embeds[0].title == "Queue:": #Queue Controls
+        emoji = payload.emoji.name
+        print(emoji)
+        if emoji == "⏮️":
+            #await channel.send("BACK")
+            await bot.cogs['MIRTIN'].previous(ctx)
+            pass
+        if emoji == "⏯️":
+            #await channel.send("PLAY/PAUSE")
+            await bot.cogs['MIRTIN'].pause(ctx)
+            pass
+        if emoji == "⏭️":
+            #await channel.send("SKIP")
+            await bot.cogs['MIRTIN'].skip(ctx)
+            pass
+        reaction = discord.utils.get(message.reactions, emoji=emoji)
+        await reaction.remove(payload.member)
+    else:
+        return
 
 bot.add_cog(MIRTIN(bot))
 try:

@@ -1,9 +1,11 @@
 import asyncio
 from asyncio import sleep
-import discord
+
 import yt_dlp
 #from yt_dlp import YoutubeDL
+import discord
 from discord.ext import tasks, commands
+
 import requests
 import bs4
 from bs4 import BeautifulSoup
@@ -24,6 +26,9 @@ if(token == ""):
     quit()
 loop = asyncio.get_event_loop()
 opus = False
+
+
+
 # ytdl_format_options = {
 #     'format': 'bestaudio/best',
 #     'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
@@ -107,14 +112,13 @@ ytdl_format_options = {
     'format': 'ba/b',
     'postprocessors': [{
     'key': 'FFmpegExtractAudio',
-    'preferredcodec': 'wav',
-    'preferredquality': '256',
+    #'preferredcodec': 'wav',
+    #'preferredquality': '256',
     }],
     'outtmpl': 'song.%(ext)s',
     #'external-downloader': 'aria2c',
     #'external-downloader-args': "-x 16 -s 16 -k 1M",
     'restrictfilenames': True,
-
     'default_search':"auto",
 
     #'noplaylist': True,
@@ -133,13 +137,13 @@ ytdl_format_options = {
 }
 ytdl_playlist_format_options = {
     #'format': 'bestaudio',
-    'format': 'ba/b',
+    #'format': 'ba/b',
     'postprocessors': [{
     'key': 'FFmpegExtractAudio',
-    'preferredcodec': 'wav',
-    'preferredquality': '256',
+    #'preferredcodec': 'wav',
+    #'preferredquality': '256',
     }],
-    'outtmpl': 'song.%(ext)s',
+    #'outtmpl': 'song.%(ext)s',
     #'external-downloader': 'aria2c',
     #'external-downloader-args': "-x 16 -s 16 -k 1M",
     'restrictfilenames': True,
@@ -150,7 +154,6 @@ ytdl_playlist_format_options = {
     'flat-playlist': True, #ORIGINAL FOR FASTER LOADING!
     #'no-flat-playlist': True,
     #'extract_flat': True,
-
     'nocheckcertificate': True,
     'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes
 }
@@ -208,7 +211,6 @@ ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
 ytdl_playlist = yt_dlp.YoutubeDL(ytdl_playlist_format_options)
 
 class MIRTIN(commands.Cog):
-    #__slots__ = ('bot', 'players', 'queue')
     def __init__(self, bot):
         self.bot = bot
         self.players = {}
@@ -229,6 +231,7 @@ class MIRTIN(commands.Cog):
         #Key :  Discord Server ID
         #Value: loop = asyncio.get_event_loop()
 
+
     async def handle(self, ctx):
         server_id = ctx.guild.id
         if server_id not in self.queue:
@@ -239,7 +242,8 @@ class MIRTIN(commands.Cog):
     async def spotify(self, url):
         req = requests.get(url, 'html.parser')
         soup = BeautifulSoup( req.content , 'html.parser')
-        print(soup.html)
+        #Print Debug HTML:
+        #print(soup.html)
         type_var = soup.find("meta", attrs={'property': 'og:type'})["content"]
         print(type_var)
         if not type_var:
@@ -262,28 +266,7 @@ class MIRTIN(commands.Cog):
             desc = str(soup.find("meta", attrs={'property': 'og:description'})["content"])
             return([title+" : "+desc])
 
-    # async def search(self, query):
-    #     searchurl = "https://www.youtube.com/results?search_query=" + str(query).replace(" ", "+")
-    #     result = requests.get(searchurl)
-    #     data = result.text.partition("var ytInitialData = ")[-1].partition("</script>")[0].replace(";","")
-    #     details = json.loads(data)
-    #     content = details["contents"]["twoColumnSearchResultsRenderer"]["primaryContents"]["sectionListRenderer"]["contents"][0]["itemSectionRenderer"]["contents"]
-    #     vidlist = ""
-    #     video = ""
-    #     for c in content:
-    #         try:
-    #             video = c["videoRenderer"]
-    #             break
-    #         except:
-    #             continue
-    #     data = {}
-    #     if video != "":
-    #         data["id"] = video["videoId"]
-    #         data["title"] = video["title"]["runs"][0]["text"]
-    #     else:
-    #         data["id"] = ""
-    #         data["title"] = ""
-    #     return data
+
     async def search(self, ctx, query):
         stream = True
         songs = []
@@ -333,7 +316,7 @@ class MIRTIN(commands.Cog):
         else:
             print("End of queue")
             await ctx.send("End of queue")
-        
+
 
     @commands.command()
     async def join(self, ctx, *args):
@@ -345,7 +328,6 @@ class MIRTIN(commands.Cog):
         channel = voice.channel
         if ctx.voice_client is not None:
             return await ctx.voice_client.move_to(channel)
-
         await channel.connect(timeout=60.0, reconnect=True)
 
     @commands.command()
@@ -436,7 +418,6 @@ class MIRTIN(commands.Cog):
         if not ctx.author.voice:
             await ctx.send("User is not in a voice channel")
             return()
-        #if not voice_client:
 
         url_flag = ""
         #yt_url_check = ["youtube.com/watch?v=", "http://youtube.com/watch?v=", "https://youtube.com/watch?v="]
@@ -489,9 +470,7 @@ class MIRTIN(commands.Cog):
             prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
             prog_msg = await ctx.send(prog_str)
             prog_msg_id = prog_msg.id
-
-            print("SONGS DATA")
-            print(songs_data)
+            #print(songs_data)
             stream = True
             #async with ctx.typing(): #NOT WORKING BECAUSE OF AUTOPLAY
             for song_data in songs_data:
@@ -519,8 +498,6 @@ class MIRTIN(commands.Cog):
             print("Added to queue!")
             await ctx.send("Added to queue!")
 
-
-
     @commands.command(aliases = ['s'], brief="Skips a song")
     async def skip(self, ctx):
         """Skips a song"""
@@ -542,7 +519,7 @@ class MIRTIN(commands.Cog):
             print("Skipping...")
             await ctx.send("Skipping...")
             voice_channel.stop()
-            #voice_channel = server.voice_client
+
 
     @commands.command()
     async def filter_complex(self, ctx, *filter_str):
@@ -855,6 +832,22 @@ class MIRTIN(commands.Cog):
             ctx.voice_client.source.volume = volume / 100
         await ctx.send("Changed volume to {}%".format(volume))
 
+    @commands.command(aliases = ['change', 'alternatives', 'alternative'], brief="Gives alternatives to a search query")
+    async def alt(self, ctx, *, query=""):
+        """Gives alternatives to a search query"""
+        if query == "":
+            await ctx.send("Please provide a search term to find alternatives")
+            return
+        stream = True
+        ytdl_data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch5:{query}", download=not stream))
+        search_data = ytdl_data["entries"]
+        embed_desc = ""
+        for i in search_data:
+            embed_desc+=i["title"]+"\n"
+        embed=discord.Embed(title="Alternatives:", description=embed_desc)
+        await ctx.send(embed=embed)
+        #ytdl_data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+
     @commands.command()
     async def stop(self, ctx):
         """Stops playback and leaves the voice channel"""
@@ -995,12 +988,30 @@ class timer(Queue):
     async def move_forward(self, prev):
         self.start = self.start + prev
 
-bot = commands.Bot(command_prefix=commands.when_mentioned_or("-"), description='MIRTIN: Music Bot', case_insensitive=True)
+
+
+
+
+
+#Intents Setup: discord.py 2.0
+intents = discord.Intents.default()
+intents.message_content = True
+intents.reactions = True
+#intents = discord.Intents.all()
+#intents.members = True
+
+bot = commands.Bot(
+    command_prefix=commands.when_mentioned_or("-"),
+    description='MIRTIN: Music Bot',
+    case_insensitive=True,
+    intents=intents
+)
 
 @bot.event
 async def on_ready():
     print('Logged in as {0} ({0.id})'.format(bot.user))
     print('------')
+
 @bot.event
 async def on_raw_reaction_add(payload):
     channel = bot.get_channel(payload.channel_id)
@@ -1018,23 +1029,29 @@ async def on_raw_reaction_add(payload):
         if emoji == "⏮️":
             #await channel.send("BACK")
             await bot.cogs['MIRTIN'].previous(ctx)
-            pass
+
         if emoji == "⏯️":
             #await channel.send("PLAY/PAUSE")
             await bot.cogs['MIRTIN'].pause(ctx)
-            pass
+
         if emoji == "⏭️":
             #await channel.send("SKIP")
             await bot.cogs['MIRTIN'].skip(ctx)
-            pass
+
         reaction = discord.utils.get(message.reactions, emoji=emoji)
         await reaction.remove(payload.member)
     else:
         return
 
-bot.add_cog(MIRTIN(bot))
+#New loading system
+async def main():
+    async with bot:
+        await bot.add_cog(MIRTIN(bot))
+        await bot.start(token)
 try:
-    bot.run(token)
+    asyncio.run(main())
+    #bot.run(token)
+
 except Exception as e:
     print(e)
     input("Waiting for input to exit program...")

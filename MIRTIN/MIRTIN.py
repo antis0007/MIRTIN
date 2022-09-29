@@ -24,7 +24,9 @@ if(token == ""):
     print("No token found! Be sure to add your discord bot token on the first line of the token.txt file")
     input("Waiting for input to exit program...")
     quit()
-loop = asyncio.get_event_loop()
+
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
 opus = False
 
 

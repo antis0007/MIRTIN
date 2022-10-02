@@ -24,11 +24,17 @@ if(token == ""):
     print("No token found! Be sure to add your discord bot token on the first line of the token.txt file")
     input("Waiting for input to exit program...")
     quit()
+try:
+    loop = asyncio.get_event_loop()
+except:
+    loop = asyncio.new_event_loop()
 
-loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
-opus = False
 
+opus = False
+headers = {
+    'User-Agent': "Mozilla/5.0 (X11; Linux x86_64; rv:95.0) Gecko/20100101 Firefox/95.0"
+}
 
 
 # ytdl_format_options = {
@@ -134,7 +140,7 @@ ytdl_format_options = {
     #'logtostderr': False,
     #'quiet': True,
     #'no_warnings': True,
-    'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes
+    #'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes
 
 }
 ytdl_playlist_format_options = {
@@ -155,9 +161,9 @@ ytdl_playlist_format_options = {
     #'flat-playlist': False,
     'flat-playlist': True, #ORIGINAL FOR FASTER LOADING!
     #'no-flat-playlist': True,
-    #'extract_flat': True,
+    'extract_flat': True,
     'nocheckcertificate': True,
-    'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes
+    #'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes
 }
 
 ffmpeg_options = {
@@ -242,7 +248,7 @@ class MIRTIN(commands.Cog):
             self.players[server_id] = [0,timer(0)]
 
     async def spotify(self, url):
-        req = requests.get(url, 'html.parser')
+        req = requests.get(url, 'html.parser') #, headers=headers
         soup = BeautifulSoup( req.content , 'html.parser')
         #Print Debug HTML:
         #print(soup.html)
@@ -399,99 +405,104 @@ class MIRTIN(commands.Cog):
         server_id = ctx.guild.id
         voice_client = ctx.voice_client
         voice_channel = ctx.message.guild.voice_client
-        if not voice_channel:
-            await self.join(ctx)
-            voice_channel = ctx.message.guild.voice_client
-        if len(query) == 0:
+        async with ctx.typing():
+            if not voice_channel:
+                await self.join(ctx)
+                voice_channel = ctx.message.guild.voice_client
+            if len(query) == 0:
 
-            if voice_channel.is_paused():
-                await ctx.send("Unpausing...")
-                voice_channel.resume()
-                return
-            if voice_channel.is_playing():
-                await ctx.send("Already Playing...")
-                voice_channel.resume()
-                return
-            else:
-                await ctx.send("Playing...")
-                await self.play_next(ctx)
-                return
-
-        if not ctx.author.voice:
-            await ctx.send("User is not in a voice channel")
-            return()
-
-        url_flag = ""
-        #yt_url_check = ["youtube.com/watch?v=", "http://youtube.com/watch?v=", "https://youtube.com/watch?v="]
-        spot_url_check = ["https://open.spotify.com/"]
-
-
-        for i in spot_url_check:
-            if i in query:
-                url_flag = "spot"
-
-        if url_flag == "spot": #SPOTIFY LINK
-            songs_list = await self.spotify(query)
-            if not songs_list:
-                print("Unknown Spotify Error")
-                await ctx.send("Unknown Spotify Error")
-                return
-            total = len(songs_list)
-            count = 0
-            #Progress Bar for Playlists:
-            prog_size = 10
-            prog_char = "█"
-            incomp_char   = "░"
-
-            prog_frac = (count/total)
-            prog_num = math.floor(prog_frac*prog_size)
-            prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
-            prog_msg = await ctx.send(prog_str)
-
-            for name in songs_list:
-
-                song_data = await self.search(ctx, name)
-                song = Song(song_data[0]) #NO PLAYLIST
-                await (self.queue[server_id]).add(song)
-                count += 1
-                prog_frac = (count/total)
-                prog_num = math.floor(prog_frac*prog_size)
-                prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
-                await prog_msg.edit(content = prog_str)
-
-        else: #All other playlists
-            songs_data = await self.search(ctx, query)
-            #Progress Bar for Playlists:
-            count = 0
-            total = len(songs_data)
-            prog_size = 10
-            prog_char = "█"
-            incomp_char   = "░"
-            prog_frac = (count/total)
-            prog_num = math.floor(prog_frac*prog_size)
-            prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
-            prog_msg = await ctx.send(prog_str)
-            prog_msg_id = prog_msg.id
-            #print(songs_data)
-            stream = True
-            #async with ctx.typing(): #NOT WORKING BECAUSE OF AUTOPLAY
-            for song_data in songs_data:
-                id = song_data["id"]
-                url = song_data["url"]
-                if url.startswith("https://www.youtube.com"):
-                    ytdl_data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
-                    song = Song(ytdl_data)
+                if voice_channel.is_paused():
+                    await ctx.send("Unpausing...")
+                    voice_channel.resume()
+                    return
+                if voice_channel.is_playing():
+                    await ctx.send("Already Playing...")
+                    voice_channel.resume()
+                    return
                 else:
-                    song = Song(song_data)
-                #DO THIS BECAUSE PLAYLIST EXTRACTION FAILS ON YOUTUBE
-                await asyncio.gather(self.queue[server_id].add(song))
-                count += 1
+                    await ctx.send("Playing...")
+                    await self.play_next(ctx)
+                    return
+
+            if not ctx.author.voice:
+                await ctx.send("User is not in a voice channel")
+                return()
+
+            url_flag = ""
+            #yt_url_check = ["youtube.com/watch?v=", "http://youtube.com/watch?v=", "https://youtube.com/watch?v="]
+            spot_url_check = ["https://open.spotify.com/"]
+
+
+            for i in spot_url_check:
+                if i in query:
+                    url_flag = "spot"
+
+            if url_flag == "spot": #SPOTIFY LINK
+                songs_list = await self.spotify(query)
+                print("Completed Spotify Load")
+                if not songs_list:
+                    print("Unknown Spotify Error")
+                    await ctx.send("Unknown Spotify Error")
+                    return
+                total = len(songs_list)
+                count = 0
+                #Progress Bar for Playlists:
+                prog_size = 10
+                prog_char = "█"
+                incomp_char   = "░"
+
                 prog_frac = (count/total)
                 prog_num = math.floor(prog_frac*prog_size)
                 prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
-                await prog_msg.edit(content = prog_str)
-                if not voice_channel.is_playing() and (len(self.queue[server_id].queue) == 1): #Play first song if not playing
-                    await self.play(ctx)
+                prog_msg = await ctx.send(prog_str)
+
+                for name in songs_list:
+
+                    song_data = await self.search(ctx, name)
+                    song = Song(song_data[0]) #NO PLAYLIST
+                    await asyncio.gather(self.queue[server_id].add(song))
+                    #await (self.queue[server_id]).add(song)
+                    count += 1
+                    prog_frac = (count/total)
+                    prog_num = math.floor(prog_frac*prog_size)
+                    prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
+                    await prog_msg.edit(content = prog_str)
+                    if not voice_channel.is_playing() and (len(self.queue[server_id].queue) == 1): #Play first song if not playing
+                        await self.play(ctx)
+
+            else: #All other playlists
+                songs_data = await self.search(ctx, query)
+                #Progress Bar for Playlists:
+                count = 0
+                total = len(songs_data)
+                prog_size = 10
+                prog_char = "█"
+                incomp_char   = "░"
+                prog_frac = (count/total)
+                prog_num = math.floor(prog_frac*prog_size)
+                prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
+                prog_msg = await ctx.send(prog_str)
+                prog_msg_id = prog_msg.id
+                #print(songs_data)
+                stream = True
+                #async with ctx.typing(): #NOT WORKING BECAUSE OF AUTOPLAY
+                for song_data in songs_data:
+                    id = song_data["id"]
+                    url = song_data["url"]
+                    if url.startswith("https://www.youtube.com"):
+                        ytdl_data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+                        song = Song(ytdl_data)
+                    else:
+                        song = Song(song_data)
+                    #DO THIS BECAUSE PLAYLIST EXTRACTION FAILS ON YOUTUBE
+                    await asyncio.gather(self.queue[server_id].add(song))
+                    count += 1
+                    prog_frac = (count/total)
+                    prog_num = math.floor(prog_frac*prog_size)
+                    prog_str = str("["+str(prog_char*prog_num)+str(incomp_char*(prog_size-prog_num))+"] "+str(round((prog_frac*100), 1))+"%")
+                    await prog_msg.edit(content = prog_str)
+                    if not voice_channel.is_playing() and (len(self.queue[server_id].queue) == 1): #Play first song if not playing
+                        await self.play(ctx)
 
         if len(self.queue[server_id].queue) == 1:
             print("First song in Queue...")
@@ -998,7 +1009,7 @@ class timer(Queue):
 #Intents Setup: discord.py 2.0
 intents = discord.Intents.default()
 intents.message_content = True
-intents.reactions = True
+#intents.reactions = True
 #intents = discord.Intents.all()
 #intents.members = True
 

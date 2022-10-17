@@ -24,11 +24,8 @@ if(token == ""):
     print("No token found! Be sure to add your discord bot token on the first line of the token.txt file")
     input("Waiting for input to exit program...")
     quit()
-try:
-    loop = asyncio.get_event_loop()
-except:
-    loop = asyncio.new_event_loop()
 
+loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
 opus = False
@@ -121,9 +118,9 @@ ytdl_format_options = {
     'postprocessors': [{
     'key': 'FFmpegExtractAudio',
     #'preferredcodec': 'wav',
-    #'preferredquality': '256',
+    'preferredcodec': 'm4a',
+    'preferredquality': '64',
     }],
-    'outtmpl': 'song.%(ext)s',
     #'external-downloader': 'aria2c',
     #'external-downloader-args': "-x 16 -s 16 -k 1M",
     'restrictfilenames': True,
@@ -146,11 +143,11 @@ ytdl_format_options = {
 ytdl_playlist_format_options = {
     #'format': 'bestaudio',
     #'format': 'ba/b',
-    'postprocessors': [{
-    'key': 'FFmpegExtractAudio',
+    #'postprocessors': [{
+    #'key': 'FFmpegExtractAudio',
     #'preferredcodec': 'wav',
     #'preferredquality': '256',
-    }],
+    #}],
     #'outtmpl': 'song.%(ext)s',
     #'external-downloader': 'aria2c',
     #'external-downloader-args': "-x 16 -s 16 -k 1M",
@@ -253,10 +250,12 @@ class MIRTIN(commands.Cog):
         #Print Debug HTML:
         #print(soup.html)
         type_var = soup.find("meta", attrs={'property': 'og:type'})["content"]
-        print(type_var)
+        #print(type_var)
         if not type_var:
             return(None)
 
+        #DELIMETER FOR SEARCH:
+        delim = " by "
         if(type_var == "music.playlist"):
             #songs = soup.findAll("meta", attrs={'name':'music:song'})
             songs = soup.findAll("button", attrs={'data-testid':"entity-row-v2-button"})
@@ -265,14 +264,25 @@ class MIRTIN(commands.Cog):
 
             count = 0
             for song in songs:
-                print(song)
+                #print(song)
                 count +=1
-                song_list.append(" : ".join(song.get_text("‽").split("‽")))
+                #song_list.append(" : ".join(song.get_text("‽").split("‽")))
+                #Generate search prompt list:
+                query = song.get_text("‽").split("‽")
+                songname = query[1]
+                artists = query[2:]
+                final = (songname + " by " + "".join(artists))
+                #print(final)
+                song_list.append(final)
+                #print(delim.join())
+                #song_list.append(delim.join())
+            print("SONG LIST DEBUG:")
+            print(song_list)
             return(song_list)
         if(type_var == "music.song"):
             title = str(soup.find("meta", attrs={'property': 'og:title'})["content"])
             desc = str(soup.find("meta", attrs={'property': 'og:description'})["content"])
-            return([title+" : "+desc])
+            return([title+delim+desc])
 
 
     async def search(self, ctx, query):
@@ -286,6 +296,7 @@ class MIRTIN(commands.Cog):
         else: #Search Required
             ytdl_data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch:{query}", download=not stream))
             url = ytdl_data["entries"][0]["url"]
+            #MIGHT BE A SOURCE OF ERROR ABOVE, REDO SEARCH!
 
         ytdl_data = await self.bot.loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
         if 'entries' in ytdl_data:
@@ -303,8 +314,12 @@ class MIRTIN(commands.Cog):
         server_id = ctx.message.guild.id
         if len(self.queue[server_id].queue) >= 1:
             url = self.queue[server_id].queue[0].ytdl_data["url"]
+            #print("YTDL DATA:")
+            #print(self.queue[server_id].queue[0].ytdl_data)
+            #print("")
             stream = True
             #If opus == True, volume commands will not work.
+            #print(url)
             if opus:
                 self.players[server_id][0] = discord.FFmpegOpusAudio(url, **ffmpeg_options)
             if not opus:
@@ -512,12 +527,20 @@ class MIRTIN(commands.Cog):
             await ctx.send("Added to queue!")
 
     @commands.command(aliases = ['s'], brief="Skips a song")
-    async def skip(self, ctx):
+    async def skip(self, ctx, num=1):
         """Skips a song"""
         await self.handle(ctx)
         server = ctx.message.guild
         voice_channel = server.voice_client
         server_id = ctx.message.guild.id
+        if num > 1:
+            #Calculate songs to be deleted
+            #eg: -skip 2
+            num = num - 1
+            while (num > 0):
+                self.queue[server_id].queue.pop(num)
+                num = num - 1
+        
         if not voice_channel:
             await self.join(ctx)
             voice_channel = ctx.message.guild.voice_client
@@ -1007,10 +1030,10 @@ class timer(Queue):
 
 
 #Intents Setup: discord.py 2.0
-intents = discord.Intents.default()
-intents.message_content = True
+#intents = discord.Intents.default()
+#intents.message_content = True
 #intents.reactions = True
-#intents = discord.Intents.all()
+intents = discord.Intents.all()
 #intents.members = True
 
 bot = commands.Bot(

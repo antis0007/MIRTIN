@@ -12,13 +12,17 @@ YT-DLP and FFMPEG based Discord Music Bot made with discord.py
 * Elapsed/Remaining time in Song
 * Supports most websites compatible with YT-DLP
 * Reaction button controller
+* Playlist Saving/Loading with dill serialization
 
 
 	
 ## Setup:
 Simply use the provided dependency installer to get the required packages, then provide your discord bot token in /MIRTIN/token.txt
 
-Requires FFMPEG installed on your system and added to PATH, as well as the python ffmpeg package
+**Requires FFMPEG installed on your system and added to PATH, as well as the python ffmpeg package**
+
+Some additional dependencies may not be installed with the default requirement installer, so just look for what you need (sorry about that)
+
 
 ## Showcase:
 ![mirtin](https://user-images.githubusercontent.com/31860133/196289073-967a9df9-0cf4-4ec5-b796-7542893f76a9.png)

@@ -1,5 +1,9 @@
 import asyncio
 from asyncio import sleep
+import os
+import dill
+import pickle
+dill.settings['byref'] = True
 
 import yt_dlp
 #from yt_dlp import YoutubeDL
@@ -7,15 +11,13 @@ import discord
 from discord.ext import tasks, commands
 
 import requests
-import bs4
 from bs4 import BeautifulSoup
-import json
 import time
-import threading
 import math
 import random
 import datetime
 import copy
+
 
 yt_dlp.utils.bug_reports_message = lambda: ''
 
@@ -822,8 +824,9 @@ class MIRTIN(commands.Cog):
     async def queue(self, ctx, opts=""):
         await self.handle(ctx)
         server_id = ctx.message.guild.id
-        count = 1
+        
         lensongs = 5
+        char_limit = 1000 #Discord message character limit
         if opts == "all":
             lensongs = len(self.queue[server_id].queue)
         elif opts != "":
@@ -831,26 +834,74 @@ class MIRTIN(commands.Cog):
             lensongs = opts
 
         if lensongs > len(self.queue[server_id].queue):
-            lensongs = len(self.queue[server_id].queue)
+            lensongs = len(self.queue[server_id].queue)     
+        
+        #We need to account for character limit here
+        val_list = [""]
+        message_index = 0
+        resume = 1
+        complete = False
         if len(self.queue[server_id].queue) > 0:
             embed = discord.Embed(title="Queue:",description=f"Showing up to next {lensongs} tracks, {len(self.queue[server_id].queue)} songs in total",colour=ctx.author.colour)
             embed.add_field(name="Currently playing:",value="[1] "+self.queue[server_id].queue[0].ytdl_data["title"], inline=False)
         else:
             embed = discord.Embed(title="Queue:",description=f"Empty",colour=ctx.author.colour)
+        
         if len(self.queue[server_id].queue) > 1:
-            val = ""
-            for i in range(1, lensongs):
-                val += f"[{i+1}] " + self.queue[server_id][i].ytdl_data["title"] + "\n"
+            while complete == False:
+                reset = False
+                print("RESUME AT:")
+                print(resume)
+                print("MESSAGE INDEX:")
+                print(message_index)
+                for i in range(resume, lensongs):
+                    teststr = (val_list[message_index] + f"[{i+1}] " + self.queue[server_id][i].ytdl_data["title"] + "\n")
+                    teststr = len(teststr)
+                    print(teststr)
+                    if teststr > char_limit:
+                        print("OVER CHAR LIMIT")
+                        resume = copy.deepcopy(i)
+                        val_list.append("")
+                        message_index = message_index + 1
+                        reset = True
+                        break
+                    else:
+                        val_list[message_index] += f"[{i+1}] " + self.queue[server_id][i].ytdl_data["title"] + "\n"
+                if reset == True:
+                    continue
+                else:
+                    complete = True
+                    print("COMPLETED")
 
             embed.add_field(
                 name="Next up:",
-                #value=("\n".join(self.queue[server_id][i].ytdl_data["title"] for i in range(1, lensongs))),
-                value=val,
+                value=copy.deepcopy(val_list[0]), #may not be necessary?
                 inline=False
             )
-            if len(self.queue[server_id].queue) > lensongs:
-                embed.set_footer(text="And " + str(len(self.queue[server_id].queue)-lensongs) + " more...")
-        msg = await ctx.send(embed=embed)
+            if len(val_list) == 1:
+                if len(self.queue[server_id].queue) > lensongs:
+                    embed.set_footer(text="And " + str(len(self.queue[server_id].queue)-lensongs) + " more...")
+
+            msg = await ctx.send(embed=embed)
+            val_list.pop(0)
+
+            #After the first message, this is the remaining data:
+            print(val_list)
+
+            if len(val_list) >= 1: #we encountered character limit
+                end = len(val_list)-1
+                if end > 0:
+                    for i in range(0,end):
+                        print(str(i))
+                        embed = discord.Embed(description=val_list[i],colour=ctx.author.colour)
+                        msg = await ctx.send(embed=embed)
+                print("FINAL:")
+                print(val_list)
+                embed = discord.Embed(description=val_list[-1],colour=ctx.author.colour)
+                msg = await ctx.send(embed=embed)
+        else:
+            msg = await ctx.send(embed=embed)
+        #msg = await ctx.send(embed=embed)
         #PERFORM REACTION VALIDATION USING EMBED TITLE
         #await msg.add_reaction("⏮️")
         #await msg.add_reaction("⏯️")
@@ -936,6 +987,143 @@ class MIRTIN(commands.Cog):
         title = self.queue[server_id].queue[index-1].ytdl_data["title"]
         self.queue[server_id].remove(index-1)
         await ctx.send("Removed "+title+" from Queue")
+    
+    @commands.command()
+    async def save(self, ctx, *, name=""):
+        """Saves a queue to user database"""
+        await self.handle(ctx)
+        name = name.strip()
+        print(name)
+        if name == "":
+            return await ctx.send("NO NAME PROVIDED")
+        if ctx.voice_client is None:
+            return await ctx.send("Not connected to a voice channel.")
+        id = ctx.message.author.id
+        #get current working directory
+        cwd = os.getcwd()
+        #create path with os.path.join(
+        path = os.path.join(cwd, "users", str(id))
+        #make directory if it doesn't exist in the current directory
+        if not os.path.exists(path):
+            os.makedirs(path)
+            print("CREATED PATH")
+            print(path)
+
+        #save queue to file
+        server_id = ctx.message.guild.id
+        fullpath = os.path.join(path,name+".queue")
+        print(fullpath)
+    
+        with open(fullpath, "wb") as f:
+            try:
+                #save queue as dill file
+                #pickle.dump(self.queue[server_id].queue, f)
+                dill.dump(self.queue[server_id].queue, f)
+            except(Exception) as e:
+                print(e)
+        await ctx.send("Saved Queue as "+name)
+
+    @commands.command(aliases = [])
+    async def load(self, ctx, *, name=""):
+        """Loads a queue from user database"""
+        await self.handle(ctx)
+        name = name.strip()
+        print(name)
+        if name == "":
+            return await ctx.send("NO NAME PROVIDED")
+        if ctx.voice_client is None:
+            return await ctx.send("Not connected to a voice channel.")
+        id = ctx.message.author.id
+        #get current working directory
+        cwd = os.getcwd()
+        #create path with os.path.join(
+        path = os.path.join(cwd, "users", str(id))
+        #make directory if it doesn't exist in the current directory
+        if not os.path.exists(path):
+            os.makedirs(path)
+            print("CREATED PATH")
+            print(path)
+
+        #save queue to file
+        server_id = ctx.message.guild.id
+        fullpath = os.path.join(path,name+".queue")
+        print(fullpath)
+
+        #load pickled queue file from directory
+        with open(fullpath, "rb") as f:
+            
+            #load queue from dill file
+            try:
+                loaded_queue = dill.load(f)
+            except(Exception) as e:
+                print(e)
+            
+            print(loaded_queue)
+            self.queue[ctx.message.guild.id].queue.extend(loaded_queue)
+        await ctx.send("Loaded "+ str(len(loaded_queue))+ " Songs into queue")
+    
+    @commands.command(aliases = [])
+    async def view(self, ctx, *, name=""):
+        """Views a queue from user database"""
+        await self.handle(ctx)
+        id = ctx.message.author.id
+        #if ctx.voice_client is None:
+            #return await ctx.send("Not connected to a voice channel.")
+        id = ctx.message.author.id
+        #get current working directory
+        cwd = os.getcwd()
+        #create path with os.path.join(
+        path = os.path.join(cwd, "users", str(id))
+        print(path)
+        #make directory if it doesn't exist in the current directory
+        if not os.path.exists(path):
+            os.makedirs(path)
+            print("CREATED PATH")
+            print(path)
+
+        #save queue to file
+        #server_id = ctx.message.guild.id
+  
+        #print list of all files in id directory
+        embed_desc = ""
+        for file in os.listdir(path):
+            if file.endswith(".queue"):
+                embed_desc += file[:-6]+"\n"
+                #embed_desc+=file+"\n"
+        embed=discord.Embed(title="Saved Queues:", description=embed_desc)
+        await ctx.send(embed=embed)
+    
+    @commands.command(aliases = [])
+    async def delete(self, ctx, *, name=""):
+        """Deletes a queue from user database"""
+        await self.handle(ctx)
+        name = name.strip()
+        print(name)
+        if name == "":
+            return await ctx.send("NO NAME PROVIDED")
+        if ctx.voice_client is None:
+            return await ctx.send("Not connected to a voice channel.")
+        id = ctx.message.author.id
+        #get current working directory
+        cwd = os.getcwd()
+        #create path with os.path.join(
+        path = os.path.join(cwd, "users", str(id))
+        #make directory if it doesn't exist in the current directory
+        if not os.path.exists(path):
+            os.makedirs(path)
+            print("CREATED PATH")
+            print(path)
+
+        #save queue to file
+        server_id = ctx.message.guild.id
+        fullpath = os.path.join(path,name+".queue")
+        print(fullpath)
+        try:
+            os.remove(fullpath)
+            return await ctx.send("Deleted queue: "+name)
+        except(Exception) as e:
+            print(e)
+            return await ctx.send("FAILED to delete queue: "+name)
 
     @play.before_invoke
     async def ensure_voice(self, ctx):
